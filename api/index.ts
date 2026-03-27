@@ -6,12 +6,18 @@ import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import * as schema from "../src/db/schema";
+import { courts, users, bookings } from "../src/db/schema.js";
 
 const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql, { schema });
+const db = drizzle(sql);
 
-const app = new Hono().basePath("/api");
+type Env = {
+  Variables: {
+    userId: string;
+  };
+};
+
+const app = new Hono<Env>().basePath("/api");
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 app.use("/*", cors({ origin: "*" }));
@@ -46,16 +52,16 @@ app.post("/auth/signup", async (c) => {
     return c.json({ error: "Password must be at least 6 characters" }, 400);
   }
 
-  const existing = await db.select().from(schema.users).where(eq(schema.users.email, email));
+  const existing = await db.select().from(users).where(eq(users.email, email));
   if (existing.length > 0) {
     return c.json({ error: "Email already registered" }, 409);
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db
-    .insert(schema.users)
+    .insert(users)
     .values({ email, passwordHash })
-    .returning({ id: schema.users.id, email: schema.users.email });
+    .returning({ id: users.id, email: users.email });
 
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
   return c.json({ token, user: { id: user.id, email: user.email } });
@@ -67,7 +73,7 @@ app.post("/auth/login", async (c) => {
     return c.json({ error: "Email and password required" }, 400);
   }
 
-  const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
+  const [user] = await db.select().from(users).where(eq(users.email, email));
   if (!user) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
@@ -84,9 +90,9 @@ app.post("/auth/login", async (c) => {
 app.get("/auth/me", authMiddleware(), async (c) => {
   const userId = c.get("userId");
   const [user] = await db
-    .select({ id: schema.users.id, email: schema.users.email })
-    .from(schema.users)
-    .where(eq(schema.users.id, userId));
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId));
   if (!user) return c.json({ error: "User not found" }, 404);
   return c.json({ user });
 });
@@ -94,7 +100,7 @@ app.get("/auth/me", authMiddleware(), async (c) => {
 // --- Courts routes (public) ---
 
 app.get("/courts", async (c) => {
-  const allCourts = await db.select().from(schema.courts);
+  const allCourts = await db.select().from(courts);
   return c.json(allCourts);
 });
 
@@ -110,16 +116,14 @@ app.get("/bookings", async (c) => {
 
   const result = await db
     .select({
-      id: schema.bookings.id,
-      courtId: schema.bookings.courtId,
-      date: schema.bookings.date,
-      startTime: schema.bookings.startTime,
-      endTime: schema.bookings.endTime,
+      id: bookings.id,
+      courtId: bookings.courtId,
+      date: bookings.date,
+      startTime: bookings.startTime,
+      endTime: bookings.endTime,
     })
-    .from(schema.bookings)
-    .where(
-      and(eq(schema.bookings.courtId, Number(courtId)), eq(schema.bookings.date, date))
-    );
+    .from(bookings)
+    .where(and(eq(bookings.courtId, Number(courtId)), eq(bookings.date, date)));
 
   return c.json(result);
 });
@@ -128,15 +132,15 @@ app.get("/my-bookings", authMiddleware(), async (c) => {
   const userId = c.get("userId");
   const result = await db
     .select({
-      id: schema.bookings.id,
-      courtId: schema.bookings.courtId,
-      date: schema.bookings.date,
-      startTime: schema.bookings.startTime,
-      endTime: schema.bookings.endTime,
-      createdAt: schema.bookings.createdAt,
+      id: bookings.id,
+      courtId: bookings.courtId,
+      date: bookings.date,
+      startTime: bookings.startTime,
+      endTime: bookings.endTime,
+      createdAt: bookings.createdAt,
     })
-    .from(schema.bookings)
-    .where(eq(schema.bookings.userId, userId));
+    .from(bookings)
+    .where(eq(bookings.userId, userId));
 
   return c.json(result);
 });
@@ -151,7 +155,7 @@ app.post("/bookings", authMiddleware(), async (c) => {
 
   try {
     const [booking] = await db
-      .insert(schema.bookings)
+      .insert(bookings)
       .values({ userId, courtId, date, startTime, endTime })
       .returning();
     return c.json(booking, 201);
@@ -169,16 +173,14 @@ app.delete("/bookings/:id", authMiddleware(), async (c) => {
 
   const [booking] = await db
     .select()
-    .from(schema.bookings)
-    .where(
-      and(eq(schema.bookings.id, bookingId), eq(schema.bookings.userId, userId))
-    );
+    .from(bookings)
+    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
 
   if (!booking) {
     return c.json({ error: "Booking not found" }, 404);
   }
 
-  await db.delete(schema.bookings).where(eq(schema.bookings.id, bookingId));
+  await db.delete(bookings).where(eq(bookings.id, bookingId));
   return c.json({ ok: true });
 });
 
