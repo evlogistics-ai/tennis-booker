@@ -37,8 +37,10 @@ const bookings = pgTable(
   (table) => [unique("unique_court_slot").on(table.courtId, table.date, table.startTime)]
 );
 
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+function getDb() {
+  const sql = neon(process.env.DATABASE_URL!);
+  return drizzle(sql);
+}
 
 type Env = {
   Variables: {
@@ -50,6 +52,9 @@ const app = new Hono<Env>().basePath("/api");
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 app.use("/*", cors({ origin: "*" }));
+
+// Health/debug
+app.get("/ping", (c) => c.json({ pong: true }));
 
 // --- Auth middleware ---
 
@@ -81,7 +86,7 @@ app.post("/auth/signup", async (c) => {
     return c.json({ error: "Password must be at least 6 characters" }, 400);
   }
 
-  const existing = await db.select().from(users).where(eq(users.email, email));
+  const existing = await getDb().select().from(users).where(eq(users.email, email));
   if (existing.length > 0) {
     return c.json({ error: "Email already registered" }, 409);
   }
@@ -102,7 +107,7 @@ app.post("/auth/login", async (c) => {
     return c.json({ error: "Email and password required" }, 400);
   }
 
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  const [user] = await getDb().select().from(users).where(eq(users.email, email));
   if (!user) {
     return c.json({ error: "Invalid credentials" }, 401);
   }
@@ -129,7 +134,7 @@ app.get("/auth/me", authMiddleware(), async (c) => {
 // --- Courts routes (public) ---
 
 app.get("/courts", async (c) => {
-  const allCourts = await db.select().from(courts);
+  const allCourts = await getDb().select().from(courts);
   return c.json(allCourts);
 });
 
@@ -209,7 +214,7 @@ app.delete("/bookings/:id", authMiddleware(), async (c) => {
     return c.json({ error: "Booking not found" }, 404);
   }
 
-  await db.delete(bookings).where(eq(bookings.id, bookingId));
+  await getDb().delete(bookings).where(eq(bookings.id, bookingId));
   return c.json({ ok: true });
 });
 
