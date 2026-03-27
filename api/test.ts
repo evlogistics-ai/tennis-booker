@@ -1,8 +1,3 @@
-import { Hono } from "hono";
-import { handle } from "hono/vercel";
-
-const app = new Hono().basePath("/api");
-
-app.get("/test", (c) => c.json({ works: true }));
-
-export default handle(app);
+export default function handler(req: any, res: any) {
+  res.status(200).json({ works: true, method: req.method, url: req.url });
+}
