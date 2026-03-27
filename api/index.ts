@@ -4,9 +4,38 @@ import { cors } from "hono/cors";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
+import { pgTable, serial, text, uuid, date, timestamp, unique } from "drizzle-orm/pg-core";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { courts, users, bookings } from "../src/db/schema.js";
+
+// Inline schema to avoid cross-directory import issues on Vercel
+const courts = pgTable("courts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  location: text("location").notNull(),
+  surface: text("surface").notNull(),
+});
+
+const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+const bookings = pgTable(
+  "bookings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    courtId: serial("court_id").notNull().references(() => courts.id),
+    date: date("date").notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [unique("unique_court_slot").on(table.courtId, table.date, table.startTime)]
+);
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
