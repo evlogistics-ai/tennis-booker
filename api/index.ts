@@ -92,7 +92,7 @@ app.post("/auth/signup", async (c) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const [user] = await db
+  const [user] = await getDb()
     .insert(users)
     .values({ email, passwordHash })
     .returning({ id: users.id, email: users.email });
@@ -123,7 +123,7 @@ app.post("/auth/login", async (c) => {
 
 app.get("/auth/me", authMiddleware(), async (c) => {
   const userId = c.get("userId");
-  const [user] = await db
+  const [user] = await getDb()
     .select({ id: users.id, email: users.email })
     .from(users)
     .where(eq(users.id, userId));
@@ -148,7 +148,7 @@ app.get("/bookings", async (c) => {
     return c.json({ error: "courtId and date required" }, 400);
   }
 
-  const result = await db
+  const result = await getDb()
     .select({
       id: bookings.id,
       courtId: bookings.courtId,
@@ -164,7 +164,7 @@ app.get("/bookings", async (c) => {
 
 app.get("/my-bookings", authMiddleware(), async (c) => {
   const userId = c.get("userId");
-  const result = await db
+  const result = await getDb()
     .select({
       id: bookings.id,
       courtId: bookings.courtId,
@@ -188,7 +188,7 @@ app.post("/bookings", authMiddleware(), async (c) => {
   }
 
   try {
-    const [booking] = await db
+    const [booking] = await getDb()
       .insert(bookings)
       .values({ userId, courtId, date, startTime, endTime })
       .returning();
@@ -205,7 +205,7 @@ app.delete("/bookings/:id", authMiddleware(), async (c) => {
   const userId = c.get("userId");
   const bookingId = c.req.param("id");
 
-  const [booking] = await db
+  const [booking] = await getDb()
     .select()
     .from(bookings)
     .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
