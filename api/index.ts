@@ -184,4 +184,8 @@ app.delete("/bookings/:id", authMiddleware(), async (c) => {
   return c.json({ ok: true });
 });
 
+export const config = {
+  maxDuration: 30,
+};
+
 export default handle(app);
